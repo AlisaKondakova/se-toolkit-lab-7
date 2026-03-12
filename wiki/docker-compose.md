@@ -34,7 +34,9 @@ For example, this project defines four services in [`docker-compose.yml`](../doc
 
 ### Service name
 
-<!-- TODO -->
+A service name is the key used to identify a [service](#service) in [`docker-compose.yml`](#docker-composeyml). It is used to reference the service in `depends_on`, log output, and [`Docker Compose` networking](#docker-compose-networking).
+
+For example, this project defines four service names in [`docker-compose.yml`](../docker-compose.yml): `app`, `postgres`, `pgadmin`, and `caddy`.
 
 ## `Docker Compose` networking
 
