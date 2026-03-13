@@ -204,17 +204,15 @@
 2. [Check the current shell in the `VS Code Terminal`](../../wiki/vs-code.md#check-the-current-shell-in-the-vs-code-terminal).
 3. [Install the recommended `VS Code` extensions](../../wiki/vs-code.md#install-the-recommended-vs-code-extensions).
 
-<details><summary><b>Troubleshooting (click to open)</b></summary>
-
-<h4>The terminal shell is not <code>bash</code> or <code>zsh</code></h4>
-
-Go back to [step 1.4.3](#143-upd-windows-only-switch-to-the-linux-shell-for-the-vs-code-terminal) and set the default shell.
-
-<h4>Recommended extensions did not install</h4>
-
-Reload the `VS Code` window: press `Ctrl+Shift+P`, type `Reload Window`, and press `Enter`.
-
-</details>
+> <h3>Troubleshooting</h3>
+>
+> **The terminal shell is not `bash` or `zsh`.**
+>
+> Go back to [step 1.4.3](#143-upd-windows-only-switch-to-the-linux-shell-for-the-vs-code-terminal) and set the default shell.
+>
+> **Recommended extensions did not install.**
+>
+> Reload the `VS Code` window: press `Ctrl+Shift+P`, type `Reload Window`, and press `Enter`.
 
 ### 1.8. Continue creating a VM
 
