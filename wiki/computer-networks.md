@@ -6,16 +6,22 @@
 - [Machine](#machine)
 - [Internet](#internet)
 - [Protocol](#protocol)
-- [IP address](#ip-address)
-  - [IPv4](#ipv4)
-  - [IPv6](#ipv6)
 - [Host](#host)
   - [Local host](#local-host)
   - [Remote host](#remote-host)
+- [Host addresses](#host-addresses)
+  - [IP address](#ip-address)
+    - [IPv4](#ipv4)
+    - [IPv6](#ipv6)
   - [Hostname](#hostname)
-    - [`localhost`](#localhost)
-    - [`127.0.0.1`](#127001)
-    - [`0.0.0.0`](#0000)
+  - [FQDN](#fqdn)
+  - [`<hostname>` placeholder](#hostname-placeholder)
+  - [`<host-fqdn>` placeholder](#host-fqdn-placeholder)
+  - [`<host-ip-address>` placeholder](#host-ip-address-placeholder)
+  - [`<host>` placeholder](#host-placeholder)
+  - [`localhost`](#localhost)
+  - [`127.0.0.1`](#127001)
+  - [`0.0.0.0`](#0000)
 - [Port](#port)
   - [Port number](#port-number)
   - [System port](#system-port)
@@ -52,30 +58,6 @@ A protocol is a set of rules that define how data is transmitted and received ov
 
 Example: [`HTTP`](./http.md#what-is-http) is the protocol used for communication between [web servers](./web-infrastructure.md#web-server) and [web clients](./web-infrastructure.md#web-client).
 
-## IP address
-
-An IP address (Internet Protocol address) is a numerical label assigned to each device connected to a [network](#what-is-a-network).
-
-It identifies the device and its location in the network.
-
-Example: `192.0.2.1` ([IPv4](#ipv4)).
-
-### IPv4
-
-`IPv4` (Internet Protocol version 4) uses 32-bit addresses, written as four decimal numbers separated by dots.
-
-Example: `192.0.2.1`, `127.0.0.1`.
-
-It supports approximately 4.3 billion unique addresses.
-
-### IPv6
-
-`IPv6` (Internet Protocol version 6) uses 128-bit addresses, written as eight groups of four hexadecimal digits separated by colons.
-
-Example: `2001:db8::1`.
-
-It was introduced to address the exhaustion of [IPv4](#ipv4) addresses and supports a vastly larger address space.
-
 ## Host
 
 A host is any [machine](#machine) that:
@@ -99,6 +81,32 @@ A remote [host](#host) is a host that is not the [local host](#localhost) — it
 
 Example: [your VM](./vm.md#your-vm) you connect to via [`SSH`](./ssh.md#what-is-ssh) is a remote host.
 
+## Host addresses
+
+### IP address
+
+An IP address (Internet Protocol address) is a numerical label assigned to each device connected to a [network](#what-is-a-network).
+
+It identifies the device and its location in the network.
+
+Example: `192.0.2.1` ([IPv4](#ipv4)).
+
+#### IPv4
+
+`IPv4` (Internet Protocol version 4) uses 32-bit addresses, written as four decimal numbers separated by dots.
+
+Example: `192.0.2.1`, `127.0.0.1`.
+
+It supports approximately 4.3 billion unique addresses.
+
+#### IPv6
+
+`IPv6` (Internet Protocol version 6) uses 128-bit addresses, written as eight groups of four hexadecimal digits separated by colons.
+
+Example: `2001:db8::1`.
+
+It was introduced to address the exhaustion of [IPv4](#ipv4) addresses and supports a vastly larger address space.
+
 ### Hostname
 
 A hostname is a human-readable label assigned to a [host](#host) on a [network](#what-is-a-network).
@@ -107,19 +115,40 @@ It is used to identify the host instead of its [IP address](#ip-address).
 
 Examples: [`localhost`](#localhost), `my-server`, [`vm.innopolis.university`](./vm.md#go-to-the-vms-site).
 
-#### `localhost`
+### FQDN
+
+### `<hostname>` placeholder
+
+The [hostname](#hostname) (without `<` and `>`).
+
+### `<host-fqdn>` placeholder
+
+The [FQDN](#fqdn) of the [host](#host) (without `<` and `>`).
+
+### `<host-ip-address>` placeholder
+
+The [IP address](#ip-address) of the [host](#host) (without `<` and `>`).
+
+### `<host>` placeholder
+
+[`<hostname>`](#hostname-placeholder) or [`<host-ip-address>`](#host-ip-address-placeholder).
+
+### `localhost`
 
 `localhost` is a [hostname](#hostname) that refers to the current [host](#host).
 
 It resolves to the loopback [IP address](#ip-address) `127.0.0.1`.
 
-Connections to `localhost` never leave the host — they are handled entirely within the [operating system](./operating-system.md#what-is-an-operating-system).
+Connections to `localhost` never leave the host.
+They are handled entirely within the [operating system](./operating-system.md#what-is-an-operating-system).
 
-#### `127.0.0.1`
+### `127.0.0.1`
 
-`127.0.0.1` is the loopback [IP address](#ip-address). [`localhost`](#localhost) resolves to this address.
+`127.0.0.1` is the loopback [IP address](#ip-address).
 
-#### `0.0.0.0`
+[`localhost`](#localhost) resolves to this address.
+
+### `0.0.0.0`
 
 `0.0.0.0` is a special [IP address](#ip-address) that means "all network interfaces on this [host](#host)."
 
