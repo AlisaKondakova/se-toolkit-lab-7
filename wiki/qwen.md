@@ -214,6 +214,12 @@ Example: `@main.py`.
 
    In the `Select Model` dialogue, you should see the available [models](./llm.md#model).
 
+   At the time of writing there is:
+
+   - `coder-model` - `Qwen 3.5 Plus` — efficient hybrid model with leading coding performance.
+      - [Modality](./llm.md#modality): text · image · video
+      - [Context Window](./llm.md#context-window): 1,000,000 tokens
+
 ### Quit the chat with `Qwen Code`
 
 1. Write `/quit`.
