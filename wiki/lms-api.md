@@ -24,11 +24,11 @@ The [LMS API host port](#lms-api-host-port).
 >
 > See [URL](./computer-networks.md#url).
 
-- (REMOTE) When running the request on the VM:
+- (REMOTE or LOCAL) When running the request on the [host](./computer-networks.md#host) where the [LMS API is deployed](./lms-api-deployment.md#about-the-lms-api-deployment):
   
   `http://localhost:<lms-api-host-port>`
 
-- (LOCAL) When running the request on the local machine:
+- (LOCAL) When running the request on the local machine and the LMS API is deployed on the VM:
   
   `http://<your-vm-ip-address>:<lms-api-host-port>`
 
