@@ -1,24 +1,30 @@
-"""Handler for /labs command."""
+import httpx
+import os
 
-
-async def handle_labs(args: str = "") -> str:
-    """List available labs.
+def handle_labs(update, context):
+    backend_url = os.getenv('BACKEND_URL', 'http://localhost:42002')
+    api_key = os.getenv('BACKEND_API_KEY', '')
     
-    Args:
-        args: Command arguments (ignored for labs)
-        
-    Returns:
-        List of available labs
-    """
-    # TODO: Implement real lab listing in Task 2
-    return (
-        "📋 Available Labs (placeholder):\n\n"
-        "• lab-01: Git basics\n"
-        "• lab-02: Docker setup\n"
-        "• lab-03: CI/CD pipeline\n"
-        "• lab-04: Testing\n"
-        "• lab-05: Monitoring\n"
-        "• lab-06: Security\n"
-        "• lab-07: Final project\n\n"
-        "✨ Full integration coming in Task 2!"
-    )
+    try:
+        with httpx.Client() as client:
+            response = client.get(
+                f"{backend_url}/items/",
+                headers={"Authorization": f"Bearer {api_key}"},
+                timeout=5.0
+            )
+            response.raise_for_status()
+            items = response.json()
+            
+            # Фильтруем лабы
+            labs = [item for item in items if item.get('type') == 'lab']
+            
+            if not labs:
+                return "No labs found."
+            
+            result = "Available labs:\n"
+            for lab in labs:
+                name = lab.get('name', lab.get('id', 'Unknown'))
+                result += f"- {name}\n"
+            return result
+    except Exception as e:
+        return f"❌ Backend error: {str(e)}"
