@@ -1,2 +1,2 @@
 def handle_start(update, context):
-    return "Welcome to the SE Toolkit Bot! "
+    return "Welcome! Use /help for commands."
