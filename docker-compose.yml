@@ -89,6 +89,35 @@ services:
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile
 
+  bot:
+    build:
+      context: ./bot
+      dockerfile: Dockerfile
+      args:
+        REGISTRY_PREFIX: ${REGISTRY_PREFIX:-harbor.pg.innopolis.university/docker-hub-cache/}
+    container_name: se-toolkit-lab-7-bot
+    restart: unless-stopped
+    environment:
+      - TELEGRAM_BOT_TOKEN=${BOT_TOKEN:?'BOT_TOKEN is required'}
+      - BACKEND_URL=http://caddy:${CADDY_CONTAINER_PORT}
+      - BACKEND_API_KEY=${LMS_API_KEY:?'LMS_API_KEY is required'}
+      - LLM_API_KEY=${LLM_API_KEY:-dummy-key}
+      - LLM_API_BASE_URL=${LLM_API_BASE_URL:-http://host.docker.internal:42005/v1}
+      - LLM_API_MODEL=${LLM_API_MODEL:-qwen2.5-coder:latest}
+      - DEBUG=${DEBUG:-false}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - lms-network
+    depends_on:
+      - backend
+      - caddy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 volumes:
   postgres_data:
 
