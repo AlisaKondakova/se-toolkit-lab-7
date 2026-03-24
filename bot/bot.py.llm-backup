@@ -1,0 +1,407 @@
+#!/usr/bin/env python3
+import os
+import sys
+import json
+import asyncio
+import logging
+from typing import Optional, List, Dict, Any
+
+import httpx
+from openai import OpenAI
+from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
+from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
+from dotenv import load_dotenv
+
+load_dotenv()
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Configuration
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:42002")
+API_KEY = os.getenv("BACKEND_API_KEY")
+LLM_API_KEY = os.getenv("LLM_API_KEY")
+LLM_API_BASE_URL = os.getenv("LLM_API_BASE_URL", "http://localhost:42005/v1")
+LLM_API_MODEL = os.getenv("LLM_API_MODEL", "qwen2.5-coder:latest")
+
+# Tool definitions for the LLM
+TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "get_items",
+            "description": "Get list of all available labs and tasks. Use this to discover what labs exist.",
+            "parameters": {"type": "object", "properties": {}, "required": []}
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_learners",
+            "description": "Get list of enrolled students and groups. Use this to see who is in the course.",
+            "parameters": {"type": "object", "properties": {}, "required": []}
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_scores",
+            "description": "Get score distribution (4 buckets: excellent, good, average, poor) for a specific lab.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "lab": {"type": "string", "description": "Lab identifier, e.g. 'lab-01'"}
+                },
+                "required": ["lab"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_pass_rates",
+            "description": "Get per-task average scores and attempt counts for a lab. Shows detailed task-level performance.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "lab": {"type": "string", "description": "Lab identifier, e.g. 'lab-01'"}
+                },
+                "required": ["lab"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_timeline",
+            "description": "Get submissions per day timeline for a lab. Shows when students are submitting.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "lab": {"type": "string", "description": "Lab identifier, e.g. 'lab-01'"}
+                },
+                "required": ["lab"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_groups",
+            "description": "Get per-group scores and student counts for a lab. Compare group performance.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "lab": {"type": "string", "description": "Lab identifier, e.g. 'lab-01'"}
+                },
+                "required": ["lab"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_top_learners",
+            "description": "Get top N learners by score for a lab. Use limit parameter to control how many.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "lab": {"type": "string", "description": "Lab identifier, e.g. 'lab-01'"},
+                    "limit": {"type": "integer", "description": "Number of top learners to return, default 5"}
+                },
+                "required": ["lab"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_completion_rate",
+            "description": "Get completion rate percentage for a lab. Shows what percent completed the lab.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "lab": {"type": "string", "description": "Lab identifier, e.g. 'lab-01'"}
+                },
+                "required": ["lab"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "trigger_sync",
+            "description": "Refresh data from autochecker (sync all lab data). Use when data seems outdated.",
+            "parameters": {"type": "object", "properties": {}, "required": []}
+        }
+    }
+]
+
+async def make_api_request(method: str, endpoint: str, data: dict = None) -> Optional[Any]:
+    """Make HTTP request to the backend API."""
+    if not API_KEY:
+        logger.error("BACKEND_API_KEY not set")
+        return None
+    url = f"{BACKEND_URL}{endpoint}"
+    headers = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            if method == "GET":
+                response = await client.get(url, headers=headers, params=data)
+            elif method == "POST":
+                response = await client.post(url, headers=headers, json=data)
+            else:
+                return None
+            
+            if response.status_code == 200:
+                return response.json()
+            logger.error(f"API error: {response.status_code} - {response.text}")
+            return None
+    except Exception as e:
+        logger.error(f"API error: {e}")
+        return None
+
+def execute_tool(tool_name: str, parameters: dict) -> Any:
+    """Execute a tool synchronously and return the result."""
+    try:
+        import requests
+        
+        base_url = BACKEND_URL
+        headers = {"Authorization": f"Bearer {API_KEY}"}
+        
+        if tool_name == "get_items":
+            response = requests.get(f"{base_url}/items/", headers=headers, timeout=10)
+        elif tool_name == "get_learners":
+            response = requests.get(f"{base_url}/learners/", headers=headers, timeout=10)
+        elif tool_name == "get_scores":
+            lab = parameters.get("lab")
+            response = requests.get(f"{base_url}/analytics/scores", params={"lab": lab}, headers=headers, timeout=10)
+        elif tool_name == "get_pass_rates":
+            lab = parameters.get("lab")
+            response = requests.get(f"{base_url}/analytics/pass-rates", params={"lab": lab}, headers=headers, timeout=10)
+        elif tool_name == "get_timeline":
+            lab = parameters.get("lab")
+            response = requests.get(f"{base_url}/analytics/timeline", params={"lab": lab}, headers=headers, timeout=10)
+        elif tool_name == "get_groups":
+            lab = parameters.get("lab")
+            response = requests.get(f"{base_url}/analytics/groups", params={"lab": lab}, headers=headers, timeout=10)
+        elif tool_name == "get_top_learners":
+            lab = parameters.get("lab")
+            limit = parameters.get("limit", 5)
+            response = requests.get(f"{base_url}/analytics/top-learners", params={"lab": lab, "limit": limit}, headers=headers, timeout=10)
+        elif tool_name == "get_completion_rate":
+            lab = parameters.get("lab")
+            response = requests.get(f"{base_url}/analytics/completion-rate", params={"lab": lab}, headers=headers, timeout=10)
+        elif tool_name == "trigger_sync":
+            response = requests.post(f"{base_url}/pipeline/sync", headers=headers, timeout=30)
+        else:
+            return f"Unknown tool: {tool_name}"
+        
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        return f"Error calling {tool_name}: {str(e)}"
+
+def route_with_llm(user_message: str) -> str:
+    """Route user message using LLM with tools."""
+    if not LLM_API_KEY:
+        logger.error("LLM_API_KEY not set")
+        return "LLM is not configured. Please check your .env file."
+    
+    client = OpenAI(
+        api_key=LLM_API_KEY,
+        base_url=LLM_API_BASE_URL
+    )
+    
+    messages = [
+        {"role": "system", "content": """You are a helpful assistant for a lab analytics system. 
+You have access to tools that can query lab data. Use them to answer user questions.
+
+Guidelines:
+- If user asks about labs without specifying which one, first get the list of labs with get_items, then query each one if needed.
+- For comparisons (e.g., "which lab has lowest pass rate"), query all labs and compare results.
+- If user asks something vague like "lab 4", ask clarifying questions about what they want (scores, pass rates, etc.).
+- For greetings like "hello", respond with a friendly greeting and list your capabilities.
+- For gibberish, respond helpfully about what you can do.
+- Be concise but informative in your final answers."""},
+        {"role": "user", "content": user_message}
+    ]
+    
+    # Tool calling loop
+    max_iterations = 5
+    for iteration in range(max_iterations):
+        try:
+            response = client.chat.completions.create(
+                model=LLM_API_MODEL,
+                messages=messages,
+                tools=TOOLS,
+                tool_choice="auto"
+            )
+            
+            message = response.choices[0].message
+            
+            # Check if there are tool calls
+            if message.tool_calls:
+                print(f"[tool] LLM called tools in iteration {iteration + 1}", file=sys.stderr)
+                
+                # Add assistant message with tool calls
+                messages.append(message)
+                
+                # Execute each tool call
+                for tool_call in message.tool_calls:
+                    tool_name = tool_call.function.name
+                    tool_args = json.loads(tool_call.function.arguments)
+                    
+                    print(f"[tool] Calling: {tool_name}({tool_args})", file=sys.stderr)
+                    result = execute_tool(tool_name, tool_args)
+                    print(f"[tool] Result: {json.dumps(result)[:200]}...", file=sys.stderr)
+                    
+                    # Add tool result to messages
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "content": json.dumps(result, ensure_ascii=False)
+                    })
+                
+                # Continue to next iteration to let LLM process results
+                continue
+            else:
+                # No tool calls - return final answer
+                final_answer = message.content
+                print(f"[summary] Completed after {iteration + 1} iterations", file=sys.stderr)
+                return final_answer
+                
+        except Exception as e:
+            logger.error(f"LLM error: {e}")
+            return f"I encountered an error: {str(e)}"
+    
+    return "I'm having trouble processing your request. Please try again."
+
+# Telegram command handlers
+async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Send a welcome message with inline keyboard buttons."""
+    keyboard = [
+        [KeyboardButton("📚 What labs are available?")],
+        [KeyboardButton("📊 Show scores for lab 04")],
+        [KeyboardButton("🏆 Top 5 students in lab 04")],
+        [KeyboardButton("📉 Which lab has lowest pass rate?")],
+        [KeyboardButton("👥 Show groups for lab 03")],
+        [KeyboardButton("❓ Help / Capabilities")]
+    ]
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    await update.message.reply_text(
+        "🤖 *Welcome to Lab Analytics Bot!*\n\n"
+        "I can answer questions about lab performance using natural language. "
+        "Try typing a question or using the buttons below!\n\n"
+        "Examples:\n"
+        "• 'What labs are available?'\n"
+        "• 'Show me scores for lab 4'\n"
+        "• 'Which lab has the lowest pass rate?'\n"
+        "• 'Who are the top 5 students in lab 03?'",
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Send help message."""
+    text = """🤖 *Lab Analytics Bot - Help*
+
+*What I can do:*
+• List all available labs
+• Show scores and pass rates for specific labs
+• Compare performance across labs
+• Show top learners
+• Show group performance
+• Show submission timelines
+
+*How to use:*
+Just type your question in natural language! For example:
+• "What labs are available?"
+• "Show me scores for lab 04"
+• "Which lab has the lowest pass rate?"
+• "Who are the top students in lab 03?"
+• "Compare groups in lab 01"
+
+*Commands:*
+/start - Welcome message with buttons
+/help - This help message
+/health - Check backend status
+
+*Buttons:*
+Use the buttons below for common queries!"""
+    await update.message.reply_text(text, parse_mode='Markdown')
+
+async def health_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Check backend health."""
+    try:
+        resp = await make_api_request("GET", "/items/")
+        if resp is None:
+            await update.message.reply_text("❌ Backend error: connection refused. Check services.")
+        else:
+            await update.message.reply_text(f"✅ Backend is healthy. {len(resp)} items available.")
+    except Exception as e:
+        await update.message.reply_text(f"❌ Backend error: {e}")
+
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle user messages with LLM routing."""
+    user_message = update.message.text
+    logger.info(f"Received message: {user_message}")
+    
+    # Show typing indicator
+    await update.message.chat.send_action(action="typing")
+    
+    # Route with LLM
+    try:
+        response = route_with_llm(user_message)
+        await update.message.reply_text(response, parse_mode='Markdown')
+    except Exception as e:
+        logger.error(f"Error in handle_message: {e}")
+        await update.message.reply_text(
+            "Sorry, I encountered an error processing your request. "
+            "Please try again or use /help to see what I can do."
+        )
+
+async def legacy_command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle legacy commands by routing through LLM."""
+    # Extract command text without the /command
+    command = update.message.text
+    user_message = f"User used command: {command}. Please interpret this and provide appropriate data."
+    await handle_message(update, context)
+
+def main():
+    """Main entry point."""
+    # Test mode
+    if len(sys.argv) > 1 and sys.argv[1] == "--test":
+        test_message = sys.argv[2] if len(sys.argv) > 2 else ""
+        if test_message:
+            print(f"Testing: {test_message}")
+            print("-" * 50)
+            response = route_with_llm(test_message)
+            print(response)
+        else:
+            print("Usage: uv run bot.py --test 'your message here'")
+        return
+    
+    # Normal bot mode
+    if not TELEGRAM_TOKEN:
+        logger.error("TELEGRAM_BOT_TOKEN not set")
+        return
+    
+    if not LLM_API_KEY:
+        logger.warning("LLM_API_KEY not set. LLM routing will not work!")
+    
+    app = Application.builder().token(TELEGRAM_TOKEN).build()
+    
+    # Command handlers
+    app.add_handler(CommandHandler("start", start_command))
+    app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CommandHandler("health", health_command))
+    
+    # Handle all text messages with LLM routing
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    
+    logger.info("Bot started. Press Ctrl+C to stop.")
+    app.run_polling()
+
+if __name__ == "__main__":
+    main()
